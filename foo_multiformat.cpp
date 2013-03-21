@@ -5,10 +5,24 @@
 #include "branch_formatter.h"
 
 DECLARE_COMPONENT_VERSION(
-"Multi-formatting Test",
-"1.0 alpha 2008-11-10",
-"Copyright (C) 2013 Holger Stenger"
+"Multi-formatting Tech Demo",
+"1.0 alpha 2013-03-21",
+"Copyright (C) 2008-2013 Holger Stenger"
 )
+
+// {FDC2BFE5-0AFC-408F-A50B-F6AED85D1E3A}
+static const GUID multiformat_branch_guid =
+{ 0xfdc2bfe5, 0xafc, 0x408f, { 0xa5, 0xb, 0xf6, 0xae, 0xd8, 0x5d, 0x1e, 0x3a } };
+
+// {8AE32E5E-D94B-45E2-B570-BC89FD7EE412}
+static const GUID multiformat_pattern_guid = 
+{ 0x8ae32e5e, 0xd94b, 0x45e2, { 0xb5, 0x70, 0xbc, 0x89, 0xfd, 0x7e, 0xe4, 0x12 } };
+
+
+static advconfig_branch_factory multiformat_branch("Multi-formatting Tech Demo", multiformat_branch_guid, advconfig_branch::guid_branch_display, 10000);
+
+static advconfig_string_factory multiformat_pattern("Pattern", multiformat_pattern_guid, multiformat_branch_guid, 0, "$swapprefix(%<artist>%)");
+
 
 class multiformat_contextmenu_item : public contextmenu_item_simple
 {
@@ -94,7 +108,9 @@ void multiformat_contextmenu_item::context_command(unsigned int p_index, metadb_
 				//titleformat_object_wrapper script("$caps($left($put(x,%<genre>%),1))|$get(x)|%<artist>%");
 				//titleformat_object_wrapper script("$swapprefix(%<artist>%)");
 				//titleformat_object_wrapper script("$if($strcmp(%<genre>%,Rock),%<genre>%)");
-				titleformat_object_wrapper script("%<test>%");
+				pfc::string8 pattern;
+				multiformat_pattern.get(pattern);
+				titleformat_object_wrapper script(pattern);
 				multiformat::branch_formatter formatter(script);
 				in_metadb_sync lock;
 				for (t_size n = 0; n < p_data.get_count(); ++n)

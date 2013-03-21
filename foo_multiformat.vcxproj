@@ -38,6 +38,7 @@
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>$(SolutionDir)../../sdk/2011-03-11;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)../../sdk/2011-03-11/foobar2000/shared;$(LibraryPath)</LibraryPath>
+    <OutDir>$(SolutionDir)../../portable/components/$(Configuration)\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>true</LinkIncremental>
