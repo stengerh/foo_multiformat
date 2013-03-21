@@ -22,6 +22,7 @@ namespace multiformat
 	};
 
 	/**
+	 * NOT USED YET.
 	 * Life cycle for each track:
 	 * 1. on_track_started(p_handle) - formatter begins formatting a new track p_handle.
 	 * 2a. on_branch_started() - formatter begins evaluation of a new branch.
@@ -107,10 +108,11 @@ namespace multiformat
 		virtual bool process_function(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, titleformat_hook_function_params * p_params, bool & p_found_flag);
 
 	private:
-		bool process_branch_field(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, bool & p_found_flag);
+		bool process_meta_branch(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, bool p_remap, bool & p_found_flag);
 
 	private:
 		branch_point_callback & m_callback;
-		pfc::map_t<pfc::string8, t_size> m_map;
+		pfc::map_t<pfc::string8, t_size> m_meta_map;
+		pfc::map_t<pfc::string8, t_size> m_meta_remap_map;
 	};
 }

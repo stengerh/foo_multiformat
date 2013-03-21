@@ -111,6 +111,37 @@ namespace multiformat
 
 	bool titleformat_hook_impl_file_info_branch::process_function(titleformat_text_out *p_out, const char *p_name, t_size p_name_length, titleformat_hook_function_params *p_params, bool &p_found_flag)
 	{
+		if (0 == pfc::strcmp_ex(p_name, p_name_length, "meta_branch_remap", pfc::infinite_size))
+		{
+			if (1 == p_params->get_param_count())
+			{
+				const char *field_name = 0;
+				t_size field_name_length = 0;
+				p_params->get_param(0, field_name, field_name_length);
+				return process_meta_branch(p_out, field_name, field_name_length, true, p_found_flag);
+			}
+			else
+			{
+				p_found_flag = false;
+				return true;
+			}
+		}
+		else if (0 == pfc::strcmp_ex(p_name, p_name_length, "meta_branch", pfc::infinite_size))
+		{
+			if (1 == p_params->get_param_count())
+			{
+				const char *field_name = 0;
+				t_size field_name_length = 0;
+				p_params->get_param(0, field_name, field_name_length);
+				return process_meta_branch(p_out, field_name, field_name_length, false, p_found_flag);
+			}
+			else
+			{
+				p_found_flag = false;
+				return true;
+			}
+		}
+
 		return false;
 	}
 
@@ -118,7 +149,7 @@ namespace multiformat
 	{
 		if ((p_name_length >= 2) && (p_name[0] == '<') && (p_name[p_name_length-1] == '>'))
 		{
-			return process_branch_field(p_out, p_name, p_name_length, p_found_flag);
+			return process_meta_branch(p_out, p_name+1, p_name_length-2, true, p_found_flag);
 		}
 		else
 		{
@@ -126,10 +157,13 @@ namespace multiformat
 		}
 	}
 
-	bool titleformat_hook_impl_file_info_branch::process_branch_field(titleformat_text_out *p_out, const char *p_name, t_size p_name_length, bool &p_found_flag)
+	bool titleformat_hook_impl_file_info_branch::process_meta_branch(titleformat_text_out *p_out, const char *p_name, t_size p_name_length, bool p_remap, bool &p_found_flag)
 	{
 		t_size meta_index;
 		t_size value_index;
+
+		pfc::map_t<pfc::string8, t_size> map = p_remap ? m_meta_remap_map : m_meta_map;
+
 		if (m_callback.next_branch_point())
 		{
 			meta_index = m_callback.get_current_branch_point().get_meta_index();
@@ -140,22 +174,33 @@ namespace multiformat
 			// Check for previous occurrence of this field.
 			pfc::string8 name(p_name, p_name_length);
 			// XXX stack index might point to branch point that was removed from the stack.
-			if (m_map.exists(name) && (m_map[name] < m_callback.get_current_branch_point_index()))
+			if (map.exists(name) && (map[name] < m_callback.get_current_branch_point_index()))
 			{
 				// Use existing entry.
-				t_size stack_index = m_map[name];
+				t_size stack_index = map[name];
 				meta_index = m_callback.get_branch_point(stack_index).get_meta_index();
 				value_index = m_callback.get_branch_point(stack_index).get_value_index();
 			}
 			else
 			{
 				// Add new entry.
-				if (remap_meta(meta_index, p_name+1, p_name_length-2))
+				bool found;
+				if (p_remap)
+				{
+					found = remap_meta(meta_index, p_name, p_name_length);
+				}
+				else
+				{
+					meta_index = m_info->meta_find_ex(p_name, p_name_length);
+					found = (meta_index != pfc::infinite_size);
+				}
+
+				if (found)
 				{
 					t_size value_count = m_info->meta_enum_value_count(meta_index);
 					m_callback.add_branch_point(branch_point(pfc::max_t<t_size>(1, value_count), meta_index));
 					value_index = 0;
-					m_map[name] = m_callback.get_current_branch_point_index();
+					map[name] = m_callback.get_current_branch_point_index();
 				}
 				else
 				{
