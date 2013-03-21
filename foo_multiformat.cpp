@@ -7,7 +7,7 @@
 DECLARE_COMPONENT_VERSION(
 "Multi-formatting Test",
 "1.0 alpha 2008-11-10",
-"Copyright (C) 2008 Holger Stenger"
+"Copyright (C) 2013 Holger Stenger"
 )
 
 class multiformat_contextmenu_item : public contextmenu_item_simple
