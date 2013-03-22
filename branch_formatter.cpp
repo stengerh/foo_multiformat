@@ -162,7 +162,7 @@ namespace multiformat
 		t_size meta_index;
 		t_size value_index;
 
-		pfc::map_t<pfc::string8, t_size> map = p_remap ? m_meta_remap_map : m_meta_map;
+		pfc::map_t<pfc::string8, t_size> & map = p_remap ? m_meta_remap_map : m_meta_map;
 
 		if (m_callback.next_branch_point())
 		{
