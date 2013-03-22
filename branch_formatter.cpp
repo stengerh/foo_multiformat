@@ -12,9 +12,9 @@ namespace multiformat
 	{
 	}
 
-	void branch_point_manager::add_branch_point(const branch_point &p_branch_point)
+	t_size branch_point_manager::add_branch_point(const branch_point &p_branch_point)
 	{
-		m_stack.add_item(p_branch_point);
+		return m_stack.add_item(p_branch_point);
 	}
 
 	bool branch_point_manager::next_branch_point()
@@ -78,6 +78,11 @@ namespace multiformat
 		add_branch_point(branch_point(1));
 	}
 
+	t_size branch_point_manager::get_branch_point_count()
+	{
+		return m_stack.get_count();
+	}
+
 	branch_formatter::branch_formatter(titleformat_object::ptr p_script)
 		: m_script(p_script)
 	{
@@ -85,15 +90,24 @@ namespace multiformat
 
 	void branch_formatter::run_nonlocking(pfc::list_base_t<pfc::string8> & p_list_out, metadb_handle *p_handle, titleformat_text_filter * p_filter)
 	{
-		m_manager.reset();
-
 		const file_info * info = 0;
 		if (!p_handle->get_info_locked(info)) return;
-		titleformat_hook_impl_file_info_branch hook(m_manager, p_handle->get_location(), info);
+		titleformat_hook_impl_file_info_branch hook(p_handle->get_location(), info);
+
+		run_nonlocking(p_list_out, p_handle, 0, &hook, p_filter);
+	}
+
+	void branch_formatter::run_nonlocking(pfc::list_base_t<pfc::string8> & p_list_out, metadb_handle *p_handle, titleformat_hook * p_branch_neutral_hook, titleformat_branch_hook * p_branch_aware_hook, titleformat_text_filter * p_filter)
+	{
+		m_manager.reset();
+
+		titleformat_hook_impl_branch_splitter hook(p_branch_neutral_hook, p_branch_aware_hook, &m_manager);
 
 		do
 		{
 			m_manager.set_current_branch_point_index(0);
+
+			hook.prepare_branch(m_manager.get_branch_point_count());
 
 			p_handle->format_title_nonlocking(&hook, m_buffer, m_script, p_filter);
 
@@ -104,9 +118,92 @@ namespace multiformat
 		} while (m_manager.next_branch());
 	}
 
-	titleformat_hook_impl_file_info_branch::titleformat_hook_impl_file_info_branch(branch_point_callback & p_callback, const playable_location & p_location,const file_info * p_info)
-		: m_callback(p_callback), titleformat_hook_impl_file_info(p_location, p_info)
+	titleformat_hook_impl_branch_splitter::titleformat_hook_impl_branch_splitter(titleformat_hook * p_branch_neutral_hook, titleformat_branch_hook * p_branch_aware_hook, branch_point_callback * p_callback)
+		: m_branch_neutral_hook(p_branch_neutral_hook), m_branch_aware_hook(p_branch_aware_hook)
 	{
+		if (m_branch_aware_hook)
+		{
+			if (p_callback)
+			{
+				m_branch_aware_hook->set_callback(p_callback);
+			}
+			else
+			{
+				uBugCheck();
+			}
+		}
+	}
+
+	titleformat_hook_impl_branch_splitter::~titleformat_hook_impl_branch_splitter()
+	{
+		if (m_branch_aware_hook)
+		{
+			m_branch_aware_hook->set_callback(0);
+		}
+	}
+
+	void titleformat_hook_impl_branch_splitter::prepare_branch(t_size p_branch_point_limit)
+	{
+		if (m_branch_aware_hook)
+		{
+			m_branch_aware_hook->prepare_branch(p_branch_point_limit);
+		}
+	}
+
+	bool titleformat_hook_impl_branch_splitter::process_field(titleformat_text_out * p_out,const char * p_name,t_size p_name_length,bool & p_found_flag)
+	{
+		p_found_flag = false;
+		if (m_branch_neutral_hook && m_branch_neutral_hook->process_field(p_out,p_name,p_name_length,p_found_flag)) return true;
+		p_found_flag = false;
+		if (m_branch_aware_hook && m_branch_aware_hook->process_field(p_out,p_name,p_name_length,p_found_flag)) return true;
+		p_found_flag = false;
+		return false;
+	}
+
+	bool titleformat_hook_impl_branch_splitter::process_function(titleformat_text_out * p_out,const char * p_name,t_size p_name_length,titleformat_hook_function_params * p_params,bool & p_found_flag)
+	{
+		p_found_flag = false;
+		if (m_branch_neutral_hook && m_branch_neutral_hook->process_function(p_out,p_name,p_name_length,p_params,p_found_flag)) return true;
+		p_found_flag = false;
+		if (m_branch_aware_hook && m_branch_aware_hook->process_function(p_out,p_name,p_name_length,p_params,p_found_flag)) return true;
+		p_found_flag = false;
+		return false;
+	}
+	
+	titleformat_hook_impl_file_info_branch::titleformat_hook_impl_file_info_branch(const playable_location & p_location,const file_info * p_info)
+		: m_callback(0), m_location(p_location), m_info(p_info)
+	{
+	}
+
+	void titleformat_hook_impl_file_info_branch::set_callback(branch_point_callback * p_callback)
+	{
+		m_callback = p_callback;
+	}
+
+	void titleformat_hook_impl_file_info_branch::prepare_branch(t_size p_branch_point_limit)
+	{
+		remove_invalid_entries(m_meta_map, p_branch_point_limit);
+		remove_invalid_entries(m_meta_remap_map, p_branch_point_limit);
+	}
+
+	void titleformat_hook_impl_file_info_branch::remove_invalid_entries(pfc::map_t<pfc::string8, t_size> & p_map, t_size p_branch_point_limit)
+	{
+		typedef pfc::map_t<pfc::string8, t_size>::iterator iterator;
+
+		iterator current = p_map.first();
+		while (current != p_map.last())
+		{
+			if (current->m_value >= p_branch_point_limit)
+			{
+				iterator obsolete = current;
+				++current;
+				p_map.remove(obsolete);
+			}
+			else
+			{
+				++current;
+			}
+		}
 	}
 
 	bool titleformat_hook_impl_file_info_branch::process_function(titleformat_text_out *p_out, const char *p_name, t_size p_name_length, titleformat_hook_function_params *p_params, bool &p_found_flag)
@@ -164,22 +261,22 @@ namespace multiformat
 
 		pfc::map_t<pfc::string8, t_size> & map = p_remap ? m_meta_remap_map : m_meta_map;
 
-		if (m_callback.next_branch_point())
+		if (m_callback->next_branch_point())
 		{
-			meta_index = m_callback.get_current_branch_point().get_meta_index();
-			value_index = m_callback.get_current_branch_point().get_value_index();
+			meta_index = m_callback->get_current_branch_point().get_meta_index();
+			value_index = m_callback->get_current_branch_point().get_value_index();
 		}
 		else
 		{
 			// Check for previous occurrence of this field.
 			pfc::string8 name(p_name, p_name_length);
 			// XXX stack index might point to branch point that was removed from the stack.
-			if (map.exists(name) && (map[name] < m_callback.get_current_branch_point_index()))
+			if (map.exists(name) && (map[name] < m_callback->get_current_branch_point_index()))
 			{
 				// Use existing entry.
 				t_size stack_index = map[name];
-				meta_index = m_callback.get_branch_point(stack_index).get_meta_index();
-				value_index = m_callback.get_branch_point(stack_index).get_value_index();
+				meta_index = m_callback->get_branch_point(stack_index).get_meta_index();
+				value_index = m_callback->get_branch_point(stack_index).get_value_index();
 			}
 			else
 			{
@@ -198,13 +295,13 @@ namespace multiformat
 				if (found)
 				{
 					t_size value_count = m_info->meta_enum_value_count(meta_index);
-					m_callback.add_branch_point(branch_point(pfc::max_t<t_size>(1, value_count), meta_index));
+					t_size branch_point_index = m_callback->add_branch_point(branch_point(pfc::max_t<t_size>(1, value_count), meta_index));
 					value_index = 0;
-					map[name] = m_callback.get_current_branch_point_index();
+					map[name] = branch_point_index;
 				}
 				else
 				{
-					m_callback.add_branch_point(branch_point(1));
+					m_callback->add_branch_point(branch_point(1));
 					p_found_flag = false;
 					return true;
 				}

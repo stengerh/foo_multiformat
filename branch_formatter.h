@@ -21,38 +21,14 @@ namespace multiformat
 		t_size m_value_index;
 	};
 
-	/**
-	 * NOT USED YET.
-	 * Life cycle for each track:
-	 * 1. on_track_started(p_handle) - formatter begins formatting a new track p_handle.
-	 * 2a. on_branch_started() - formatter begins evaluation of a new branch.
-	 * 2b. on_branch_replay_finished() - formatter reached the last branch point, i.e. it has restored the state where the latest decision was made and continues evaluating another choice.
-	 * 2c. on_branch_finished(p_valid) - formatter finished evaluation of a branch, p_valid specifies whether the branch is used or discarded.
-	 * 3. on_track_finished() - formatter evaluated all branches for the current track.
-	 */
-	NOVTABLE class branch_formatter_callback
-	{
-	protected:
-		branch_formatter_callback() {}
-		~branch_formatter_callback() {}
-
-	public:
-		virtual void on_track_started(metadb_handle *p_handle) = 0;
-		virtual void on_track_finished() = 0;
-
-		virtual void on_branch_started() = 0;
-		virtual void on_branch_replay_finished() = 0;
-		virtual void on_branch_finished(bool p_valid) = 0;
-	};
-
-	NOVTABLE class branch_point_callback
+	class NOVTABLE branch_point_callback
 	{
 	protected:
 		branch_point_callback() {}
 		~branch_point_callback() {}
 
 	public:
-		virtual void add_branch_point(const branch_point &p_branch_point) = 0;
+		virtual t_size add_branch_point(const branch_point &p_branch_point) = 0;
 		virtual bool next_branch_point() = 0;
 
 		virtual t_size get_current_branch_point_index() const = 0;
@@ -61,13 +37,26 @@ namespace multiformat
 		const branch_point & get_current_branch_point() const {return get_branch_point(get_current_branch_point_index());}
 	};
 
+	class NOVTABLE titleformat_branch_hook
+	{
+	protected:
+		titleformat_branch_hook() {}
+		~titleformat_branch_hook() {}
+
+	public:
+		virtual void set_callback(branch_point_callback * p_callback) = 0;
+		virtual void prepare_branch(t_size p_branch_point_limit) = 0;
+		virtual bool process_field(titleformat_text_out * p_out,const char * p_name,t_size p_name_length,bool & p_found_flag) = 0;
+		virtual bool process_function(titleformat_text_out * p_out,const char * p_name,t_size p_name_length,titleformat_hook_function_params * p_params,bool & p_found_flag) = 0;
+	};
+
 	class branch_point_manager : public branch_point_callback
 	{
 	public:
 		branch_point_manager();
 		~branch_point_manager();
 
-		void add_branch_point(const branch_point &p_item);
+		t_size add_branch_point(const branch_point &p_item);
 		bool next_branch_point();
 
 		void set_current_branch_point_index(t_size p_index);
@@ -77,6 +66,7 @@ namespace multiformat
 		bool is_branch_empty() const;
 		bool next_branch();
 		void reset();
+		t_size get_branch_point_count();
 	private:
 		pfc::list_t<branch_point> m_stack;
 		t_size m_current;
@@ -90,28 +80,56 @@ namespace multiformat
 		void run_nonlocking(pfc::list_base_t<pfc::string8> & p_list_out, metadb_handle *p_handle, titleformat_text_filter * p_filter);
 
 	private:
-		bool is_branch_empty() const;
-		bool next_branch();
+		void run_nonlocking(pfc::list_base_t<pfc::string8> & p_list_out, metadb_handle *p_handle, titleformat_hook * p_branch_neutral_hook, titleformat_branch_hook * p_branch_aware_hook, titleformat_text_filter * p_filter);
 
+	private:
 		titleformat_object::ptr m_script;
 		pfc::string_formatter m_buffer;
 
 		branch_point_manager m_manager;
 	};
 
-	class titleformat_hook_impl_file_info_branch : public titleformat_hook_impl_file_info
+	class titleformat_hook_impl_branch_splitter : public titleformat_hook
 	{
 	public:
-		titleformat_hook_impl_file_info_branch(branch_point_callback & p_callback, const playable_location & p_location,const file_info * p_info);
+		titleformat_hook_impl_branch_splitter(titleformat_hook * p_branch_neutral_hook, titleformat_branch_hook * p_branch_aware_hook, branch_point_callback * p_callback);
+		~titleformat_hook_impl_branch_splitter();
+
+		void prepare_branch(t_size p_branch_point_limit);
+
+		virtual bool process_field(titleformat_text_out * p_out,const char * p_name,t_size p_name_length,bool & p_found_flag);
+		virtual bool process_function(titleformat_text_out * p_out,const char * p_name,t_size p_name_length,titleformat_hook_function_params * p_params,bool & p_found_flag);
+
+	private:
+		titleformat_hook * m_branch_neutral_hook;
+		titleformat_branch_hook * m_branch_aware_hook;
+	};
+
+	class titleformat_hook_impl_file_info_branch : public titleformat_branch_hook
+	{
+	public:
+		titleformat_hook_impl_file_info_branch(const playable_location & p_location,const file_info * p_info);
+
+		virtual void set_callback(branch_point_callback * p_callback);
+		virtual void prepare_branch(t_size p_branch_point_limit);
 
 		virtual bool process_field(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, bool & p_found_flag);
 		virtual bool process_function(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, titleformat_hook_function_params * p_params, bool & p_found_flag);
 
-	private:
-		bool process_meta_branch(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, bool p_remap, bool & p_found_flag);
+	protected:
+		bool remap_meta(t_size & p_index, const char * p_name, t_size p_name_length) {return m_api->remap_meta(*m_info,p_index,p_name,p_name_length);}
+		const file_info * m_info;
 
 	private:
-		branch_point_callback & m_callback;
+		bool process_meta_branch(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, bool p_remap, bool & p_found_flag);
+		void remove_invalid_entries(pfc::map_t<pfc::string8, t_size> & p_map, t_size p_branch_point_limit);
+
+	private:
+		const playable_location & m_location;
+		static_api_ptr_t<titleformat_common_methods> m_api;
+
+	private:
+		branch_point_callback * m_callback;
 		pfc::map_t<pfc::string8, t_size> m_meta_map;
 		pfc::map_t<pfc::string8, t_size> m_meta_remap_map;
 	};
