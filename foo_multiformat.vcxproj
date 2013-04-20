@@ -79,7 +79,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="branch_formatter.cpp" />
-    <ClCompile Include="foo_multiformat.cpp" />
+    <ClCompile Include="multiformat_contextmenu.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="multiformat_dialog.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
@@ -87,6 +89,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="branch_formatter.h" />
+    <ClInclude Include="multiformat_dialog.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
@@ -100,6 +104,9 @@
     <ProjectReference Include="..\..\sdk\2011-03-11\pfc\pfc.vcxproj">
       <Project>{ebfffb4e-261d-44d3-b89c-957b31a0bf9c}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="foo_multiformat.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
