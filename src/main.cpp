@@ -5,7 +5,7 @@
 
 DECLARE_COMPONENT_VERSION(
 "Multi-formatting Tech Demo",
-"1.0 alpha 2013-04-21",
+"1.0 alpha 2013-04-24",
 "This component is a tech demo. As such it may not be as stable as a production quality release.\n"
 "The component demonstrates a title formatting technique which allows using arbitrary functions on "
 "the individual values of multi-value fields. "
