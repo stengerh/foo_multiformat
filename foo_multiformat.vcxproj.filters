@@ -15,47 +15,51 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="branch_formatter.cpp">
+    <None Include="license.txt" />
+    <None Include="readme.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\branch_formatter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="stdafx.cpp">
+    <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="multiformat_dialog.cpp">
+    <ClCompile Include="src\multiformat_contextmenu.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="multiformat_contextmenu.cpp">
+    <ClCompile Include="src\multiformat_dialog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="src\stdafx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="titleformat_hooks.cpp">
+    <ClCompile Include="src\titleformat_hooks.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="branch_formatter.h">
+    <ClInclude Include="src\branch_formatter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="stdafx.h">
+    <ClInclude Include="src\multiformat_dialog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="targetver.h">
+    <ClInclude Include="src\resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="resource.h">
+    <ClInclude Include="src\stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="multiformat_dialog.h">
+    <ClInclude Include="src\targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="titleformat_hooks.h">
+    <ClInclude Include="src\titleformat_hooks.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="foo_multiformat.rc">
+    <ResourceCompile Include="src\foo_multiformat.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
