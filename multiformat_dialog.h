@@ -1,4 +1,4 @@
-class multiformat_dialog {
+class multiformat_dialog : private message_filter {
 public:
 	static void g_show_dialog(metadb_handle_list_cref p_tracks);
 
@@ -10,6 +10,8 @@ private:
 
 	static BOOL CALLBACK g_dialog_proc(HWND p_wnd, UINT p_msg, WPARAM p_wparam, LPARAM p_lparam);
 	BOOL dialog_proc(HWND p_wnd, UINT p_msg, WPARAM p_wparam, LPARAM p_lparam);
+
+	virtual bool pretranslate_message(MSG * p_msg);
 
 	HWND m_wnd;
 

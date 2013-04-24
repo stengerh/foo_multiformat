@@ -95,7 +95,7 @@ namespace multiformat
 	public:
 		branch_formatter(titleformat_object::ptr p_script);
 
-		void run_nonlocking(pfc::list_base_t<pfc::string8> & p_list_out, metadb_handle *p_handle, titleformat_text_filter * p_filter);
+		void run_nonlocking(pfc::list_base_t<pfc::string8> & p_list_out, metadb_handle *p_handle, titleformat_text_filter * p_filter, titleformat_hook * p_hook = NULL, titleformat_hook * p_safe_hook = NULL);
 
 	private:
 		titleformat_object::ptr m_script;
@@ -125,5 +125,62 @@ namespace multiformat
 
 	private:
 		branch_point_callback & m_callback;
+	};
+
+	class titleformat_text_out_impl_cache : public titleformat_text_out {
+	public:
+		titleformat_text_out_impl_cache();
+
+		virtual void write(const GUID & p_inputtype,const char * p_data,t_size p_data_length);
+		void replay(titleformat_text_out * p_out) const;
+
+	private:
+		const GUID & get_input_type(t_size p_input_type_index) const;
+		t_size add_input_type(const GUID & p_input_type);
+
+		pfc::list_t<GUID> m_input_types;
+		pfc::list_t<t_size> m_span_input_types;
+		pfc::list_t<t_size> m_span_lengths;
+		pfc::string8 m_data;
+	};
+
+	class titleformat_hook_impl_memoize : public titleformat_hook
+	{
+	public:
+		class entry {
+		public:
+			entry() {}
+			entry(t_size p_branch_point_index);
+
+			bool record_process_field(titleformat_hook * p_hook, titleformat_text_out * p_out, const char * p_name, t_size p_name_length, bool & p_found_flag);
+			bool replay_process_field(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, bool & p_found_flag) const;
+
+			bool record_process_function(titleformat_hook * p_hook, titleformat_text_out * p_out, const char * p_name, t_size p_name_length, titleformat_hook_function_params * p_params, bool & p_found_flag);
+			bool replay_process_function(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, titleformat_hook_function_params * p_params, bool & p_found_flag) const;
+
+			t_size get_branch_point_index() const {return m_branch_point_index;}
+
+		private:
+			t_size m_branch_point_index;
+			bool m_handled;
+			bool m_found_flag;
+			titleformat_text_out_impl_cache m_text;
+		};
+
+		titleformat_hook_impl_memoize(branch_point_callback & p_callback, titleformat_hook * p_hook);
+
+		void prepare_branch(t_size p_branch_point_count);
+
+		virtual bool process_field(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, bool & p_found_flag);
+		virtual bool process_function(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, titleformat_hook_function_params * p_params, bool & p_found_flag);
+	private:
+		branch_point_callback & m_callback;
+		titleformat_hook * m_hook;
+
+		pfc::list_t<entry> m_field_cache;
+		t_size m_field_index;
+
+		pfc::list_t<entry> m_function_cache;
+		t_size m_function_index;
 	};
 }

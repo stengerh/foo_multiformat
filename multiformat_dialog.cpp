@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "multiformat_dialog.h"
 #include "branch_formatter.h"
+#include "titleformat_hooks.h"
 #include "resource.h"
 
 // {2CB95F72-FCAA-4D5A-B017-8AB389B9E30C}
@@ -50,6 +51,7 @@ BOOL multiformat_dialog::g_dialog_proc(HWND p_wnd, UINT p_msg, WPARAM p_wparam, 
 
 	if (p_msg == WM_DESTROY) {
 		if (dlg != NULL) {
+			dlg->m_wnd = NULL;
 			delete dlg;
 		}
 	}
@@ -60,8 +62,13 @@ BOOL multiformat_dialog::g_dialog_proc(HWND p_wnd, UINT p_msg, WPARAM p_wparam, 
 BOOL multiformat_dialog::dialog_proc(HWND p_wnd, UINT p_msg, WPARAM p_wparam, LPARAM p_lparam) {
 	switch (p_msg) {
 	case WM_INITDIALOG:
+		static_api_ptr_t<message_loop>()->add_message_filter(this);
 		uSetDlgItemText(p_wnd, IDC_SOURCE, g_multiformat_pattern.get_ptr());
 		return TRUE;
+
+	case WM_DESTROY:
+		static_api_ptr_t<message_loop>()->remove_message_filter(this);
+		return FALSE;
 
 	case WM_COMMAND:
 		switch (p_wparam) {
@@ -80,7 +87,9 @@ BOOL multiformat_dialog::dialog_proc(HWND p_wnd, UINT p_msg, WPARAM p_wparam, LP
 				{
 					in_metadb_sync lock;
 					for (t_size n = 0; n < m_tracks.get_count(); ++n) {
-						formatter.run_nonlocking(m_results, m_tracks[n].get_ptr(), NULL);
+						formatter.run_nonlocking(m_results, m_tracks[n].get_ptr(), NULL,
+							&titleformat_hook_impl_splitter(&titleformat_hook_impl_counter("counter"), &titleformat_hook_impl_random("random")),
+							&titleformat_hook_impl_splitter(&titleformat_hook_impl_counter("unsafe_counter"), &titleformat_hook_impl_random("unsafe_random")));
 					}
 				}
 
@@ -88,6 +97,11 @@ BOOL multiformat_dialog::dialog_proc(HWND p_wnd, UINT p_msg, WPARAM p_wparam, LP
 					pfc::string_formatter text;
 					text << "(" << (n+1) << "/" << m_results.get_count() << ") " << m_results[n];
 					::uSendDlgItemMessageText(p_wnd, IDC_RESULTS, LB_ADDSTRING, 0, text.get_ptr());
+				}
+
+				if (m_results.get_count() > 0) {
+					::uSetDlgItemText(p_wnd, IDC_OUTPUT, m_results[0].get_ptr());
+					::SendDlgItemMessage(p_wnd, IDC_RESULTS, LB_SETCURSEL, 0, 0);
 				}
 			}
 			break;
@@ -100,7 +114,7 @@ BOOL multiformat_dialog::dialog_proc(HWND p_wnd, UINT p_msg, WPARAM p_wparam, LP
 			{
 				LRESULT selectedIndex = ::SendDlgItemMessage(p_wnd, IDC_RESULTS, LB_GETCURSEL, 0, 0);
 				if (selectedIndex != LB_ERR) {
-					uSetDlgItemText(p_wnd, IDC_OUTPUT, m_results[selectedIndex].get_ptr());
+					::uSetDlgItemText(p_wnd, IDC_OUTPUT, m_results[selectedIndex].get_ptr());
 				}
 			}
 			return TRUE;
@@ -108,4 +122,12 @@ BOOL multiformat_dialog::dialog_proc(HWND p_wnd, UINT p_msg, WPARAM p_wparam, LP
 	}
 
 	return FALSE;
+}
+
+bool multiformat_dialog::pretranslate_message(MSG * p_msg) {
+	if (m_wnd != NULL) {
+		return ::IsDialogMessage(m_wnd, p_msg) != FALSE;
+	} else {
+		return false;
+	}
 }

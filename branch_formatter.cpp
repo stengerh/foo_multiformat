@@ -175,20 +175,23 @@ namespace multiformat
 	{
 	}
 
-	void branch_formatter::run_nonlocking(pfc::list_base_t<pfc::string8> & p_list_out, metadb_handle *p_handle, titleformat_text_filter * p_filter)
+	void branch_formatter::run_nonlocking(pfc::list_base_t<pfc::string8> & p_list_out, metadb_handle *p_handle, titleformat_text_filter * p_filter, titleformat_hook * p_hook, titleformat_hook * p_safe_hook)
 	{
 		const file_info * info = 0;
 		if (!p_handle->get_info_locked(info)) return;
 		titleformat_hook_impl_file_info_branch branch_hook(m_manager, p_handle->get_location(), info);
+		titleformat_hook_impl_memoize memoize_hook(m_manager, p_hook);
 
 		m_manager.reset();
 
-		//titleformat_hook_impl_splitter hook(&branch_hook, &memoize_hook);
-		titleformat_hook & hook = branch_hook;
+		titleformat_hook_impl_splitter user_hook(p_safe_hook, &memoize_hook);
+		titleformat_hook_impl_splitter hook(&branch_hook, &user_hook);
+		//titleformat_hook & hook = branch_hook;
+		//titleformat_hook_impl_splitter hook(&branch_hook, p_hook);
 
 		while (!m_manager.is_done())
 		{
-			//memoize_hook.prepare_branch(m_manager.get_branch_point_count());
+			memoize_hook.prepare_branch(m_manager.get_branch_point_count());
 
 			p_handle->format_title_nonlocking(&hook, m_buffer, m_script, p_filter);
 
@@ -302,6 +305,146 @@ namespace multiformat
 
 		// p_found_flag is already set.
 		return true;
+	}
+
+	titleformat_text_out_impl_cache::titleformat_text_out_impl_cache() {
+	}
+
+	void titleformat_text_out_impl_cache::write(const GUID & p_inputtype,const char * p_data,t_size p_data_length) {
+		if ((p_data_length != 0) && (*p_data != 0)) {
+			t_size span_length = pfc::strlen_max(p_data, p_data_length);
+			t_size span_input_type = add_input_type(p_inputtype);
+			m_span_input_types.add_item(span_input_type);
+			m_span_lengths.add_item(span_length);
+			m_data.add_string(p_data, span_length);
+		}
+	}
+
+	void titleformat_text_out_impl_cache::replay(titleformat_text_out * p_out) const {
+		t_size start = 0;
+		for (t_size span_index = 0; span_index < m_span_lengths.get_count(); ++span_index) {
+			t_size span_length = m_span_lengths[span_index];
+			p_out->write(get_input_type(m_span_input_types[span_index]), m_data.get_ptr() + start, span_length);
+			start += span_length;
+		}
+	}
+
+	const GUID & titleformat_text_out_impl_cache::get_input_type(t_size p_input_type_index) const {
+		if (p_input_type_index == 0) {
+			return titleformat_inputtypes::unknown;
+		} else if (p_input_type_index == 1) {
+			return titleformat_inputtypes::meta;
+		} else {
+			return m_input_types[p_input_type_index - 2];
+		}
+	}
+
+	t_size titleformat_text_out_impl_cache::add_input_type(const GUID & p_input_type) {
+		if (p_input_type == titleformat_inputtypes::unknown) {
+			return 0;
+		} else if (p_input_type == titleformat_inputtypes::unknown) {
+			return 1;
+		} else {
+			return 2 + m_input_types.add_item(p_input_type);
+		}
+	}
+
+	titleformat_hook_impl_memoize::titleformat_hook_impl_memoize(branch_point_callback & p_callback, titleformat_hook * p_hook)
+		: m_callback(p_callback), m_hook(p_hook), m_field_index(0), m_function_index(0) {
+	}
+
+	t_size find_branch_point(pfc::list_t<titleformat_hook_impl_memoize::entry> const & p_cache, t_size p_branch_point_index) {
+		t_size index = p_cache.get_count();
+
+		while (index > 0) {
+			if (p_cache[index-1].get_branch_point_index() < p_branch_point_index) {
+				break;
+			}
+			index -= 1;
+		}
+
+		return index;
+	}
+
+	void truncate_by_branch_point(pfc::list_t<titleformat_hook_impl_memoize::entry> & p_cache, t_size p_branch_point_index) {
+		t_size index = find_branch_point(p_cache, p_branch_point_index);
+		p_cache.truncate(index);
+	}
+
+	void titleformat_hook_impl_memoize::prepare_branch(t_size p_branch_point_count) {
+		truncate_by_branch_point(m_field_cache, p_branch_point_count);
+		m_field_index = 0;
+
+		truncate_by_branch_point(m_function_cache, p_branch_point_count);
+		m_function_index = 0;
+	}
+
+	bool titleformat_hook_impl_memoize::process_field(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, bool & p_found_flag) {
+		if (m_hook != NULL) {
+			if (m_field_index < m_field_cache.get_count()) {
+				bool handled = m_field_cache[m_field_index].replay_process_field(p_out, p_name, p_name_length, p_found_flag);
+				m_field_index += 1;
+				return handled;
+			} else {
+				bool handled = false;
+				m_field_cache.add_item(entry(m_callback.get_current_branch_point_index()));
+				handled = m_field_cache[m_field_index].record_process_field(m_hook, p_out, p_name, p_name_length, p_found_flag);
+				m_field_index += 1;
+				return handled;
+			}
+		} else {
+			p_found_flag = false;
+			return false;
+		}
+	}
+
+	bool titleformat_hook_impl_memoize::process_function(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, titleformat_hook_function_params * p_params, bool & p_found_flag) {
+		if (m_hook != NULL) {
+			if (m_function_index < m_function_cache.get_count()) {
+				bool handled = m_function_cache[m_function_index].replay_process_function(p_out, p_name, p_name_length, p_params, p_found_flag);
+				m_function_index += 1;
+				return handled;
+			} else {
+				bool handled = false;
+				m_function_cache.add_item(entry(m_callback.get_current_branch_point_index()));
+				handled = m_function_cache[m_function_index].record_process_function(m_hook, p_out, p_name, p_name_length, p_params, p_found_flag);
+				m_function_index += 1;
+				return handled;
+			}
+		} else {
+			p_found_flag = false;
+			return false;
+		}
+	}
+
+	titleformat_hook_impl_memoize::entry::entry(t_size p_branch_point_index)
+		: m_branch_point_index(p_branch_point_index), m_handled(false), m_found_flag(false) {
+	}
+
+	bool titleformat_hook_impl_memoize::entry::record_process_field(titleformat_hook * p_hook, titleformat_text_out * p_out, const char * p_name, t_size p_name_length, bool & p_found_flag) {
+		m_handled = p_hook->process_field(&m_text, p_name, p_name_length, m_found_flag);
+		return replay_process_field(p_out, p_name, p_name_length, p_found_flag);
+	}
+
+	bool titleformat_hook_impl_memoize::entry::replay_process_field(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, bool & p_found_flag) const {
+		if (m_handled) {
+			m_text.replay(p_out);
+		}
+		p_found_flag = m_found_flag;
+		return m_handled;
+	}
+
+	bool titleformat_hook_impl_memoize::entry::record_process_function(titleformat_hook * p_hook, titleformat_text_out * p_out, const char * p_name, t_size p_name_length, titleformat_hook_function_params * p_params, bool & p_found_flag) {
+		m_handled = p_hook->process_function(&m_text, p_name, p_name_length, p_params, m_found_flag);
+		return replay_process_function(p_out, p_name, p_name_length, p_params, p_found_flag);
+	}
+
+	bool titleformat_hook_impl_memoize::entry::replay_process_function(titleformat_text_out * p_out, const char * p_name, t_size p_name_length, titleformat_hook_function_params * p_params, bool & p_found_flag) const {
+		if (m_handled) {
+			m_text.replay(p_out);
+		}
+		p_found_flag = m_found_flag;
+		return m_handled;
 	}
 
 } // namespace multiformat
